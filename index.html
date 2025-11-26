@@ -1997,15 +1997,23 @@
 
             // FIX: ChatGPT often uses * instead of _ for subscripts in display math
             // Pattern: \mathcal{L}*\text{something} should be \mathcal{L}_{\text{something}}
-            // Be careful to only do this in math contexts
+            // Also handles markdown list * inside math blocks
             text = text.replace(/(\$\$[\s\S]*?\$\$)/g, (match) => {
-                // Inside display math, fix *\text{...} to _{\text{...}}
-                // This wraps the whole \text{} in braces for proper subscript
-                let fixed = match.replace(/\*\\text\{([^}]*)\}/g, '_{\\text{$1}}');
-                // Also fix *{ pattern (subscript with braces)
+                let fixed = match;
+
+                // Fix *\text{...} to _{\text{...}}
+                fixed = fixed.replace(/\*\\text\{([^}]*)\}/g, '_{\\text{$1}}');
+
+                // Fix *{ pattern for subscripts like \sum*{i=1} -> \sum_{i=1}
                 fixed = fixed.replace(/\*\{/g, '_{');
+
                 // Fix patterns like }*{ which should be }_{
                 fixed = fixed.replace(/\}\s*\*\s*\{/g, '}_{');
+
+                // Fix markdown list * at start of line inside math -> + for addition
+                // Pattern: newline, optional whitespace, *, space, then content
+                fixed = fixed.replace(/\n(\s*)\*\s+/g, '\n$1+ ');
+
                 return fixed;
             });
 
@@ -2034,13 +2042,6 @@
                 // but NOT lines that already have \\
                 let fixed = content.replace(/([^\\])\\\s*\n/g, '$1\\\\\n');
                 return fixed + end;
-            });
-
-            // Fix markdown list items that appear inside $$ blocks (ChatGPT artifact)
-            // Pattern: newline followed by * space inside $$ should become + for math
-            text = text.replace(/(\$\$[\s\S]*?\$\$)/g, (match) => {
-                // Replace markdown list "* " at start of line with "+ " for LaTeX addition
-                return match.replace(/\n\s*\*\s+(?=\\)/g, '\n+ ');
             });
 
             // FIX: Convert single $ display math blocks to $$ (ChatGPT often does this)
