@@ -1995,6 +1995,24 @@
             text = text.replace(/\\sigma!/g, '\\sigma');
             text = text.replace(/\\,\s*dt/g, '\\, dt');
 
+            // Fix \big, \Big, \bigg, \Bigg delimiter issues
+            // Sometimes they appear without proper delimiters or with wrong syntax
+            text = text.replace(/\\big\s*\(/g, '\\bigl(');
+            text = text.replace(/\\big\s*\)/g, '\\bigr)');
+            text = text.replace(/\\big\s*\[/g, '\\bigl[');
+            text = text.replace(/\\big\s*\]/g, '\\bigr]');
+            text = text.replace(/\\big\s*\{/g, '\\bigl\\{');
+            text = text.replace(/\\big\s*\}/g, '\\bigr\\}');
+            text = text.replace(/\\big\s*\|/g, '\\bigl|');
+            text = text.replace(/\\Big\s*\(/g, '\\Bigl(');
+            text = text.replace(/\\Big\s*\)/g, '\\Bigr)');
+            text = text.replace(/\\Big\s*\[/g, '\\Bigl[');
+            text = text.replace(/\\Big\s*\]/g, '\\Bigr]');
+
+            // Fix standalone \big without delimiter - remove it
+            text = text.replace(/\\big\s+([^(\[\{|])/g, '$1');
+            text = text.replace(/\\Big\s+([^(\[\{|])/g, '$1');
+
             // Fix broken aligned environments - often have single backslash at end of line
             // In aligned, lines should end with \\ but ChatGPT sometimes outputs just \
             text = text.replace(/(\\begin\{aligned\}[\s\S]*?)(\\end\{aligned\})/g, (match, content, end) => {
