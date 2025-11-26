@@ -1991,6 +1991,60 @@
         // Convert ChatGPT bracket notation to standard LaTeX delimiters
         // ChatGPT often outputs [...] for display math and (...) for inline math
         function convertChatGPTMath(text) {
+            // Fix common ChatGPT typos in LaTeX first
+            text = text.replace(/\\sigma!/g, '\\sigma');
+            text = text.replace(/\\,\s*dt/g, '\\, dt');
+
+            // Fix broken aligned environments - often have single backslash at end of line
+            // In aligned, lines should end with \\ but ChatGPT sometimes outputs just \
+            text = text.replace(/(\\begin\{aligned\}[\s\S]*?)(\\end\{aligned\})/g, (match, content, end) => {
+                // Inside aligned, fix lines that end with single \ followed by newline
+                // but NOT lines that already have \\
+                let fixed = content.replace(/([^\\])\\\s*\n/g, '$1\\\\\n');
+                return fixed + end;
+            });
+
+            // FIX: Convert single $ display math blocks to $$ (ChatGPT often does this)
+            // Pattern: $ on its own line, multi-line math content, $ on its own line
+            text = text.replace(/^\$\s*$/gm, '@@DOLLAR@@'); // Mark standalone $
+            let lines = text.split('\n');
+            let result = [];
+            let inDisplayMath = false;
+            let mathBuffer = [];
+
+            for (let i = 0; i < lines.length; i++) {
+                let line = lines[i];
+                if (line.trim() === '@@DOLLAR@@') {
+                    if (!inDisplayMath) {
+                        // Start of display math
+                        inDisplayMath = true;
+                        mathBuffer = [];
+                    } else {
+                        // End of display math
+                        inDisplayMath = false;
+                        result.push('$$');
+                        result.push(...mathBuffer);
+                        result.push('$$');
+                        mathBuffer = [];
+                    }
+                } else if (inDisplayMath) {
+                    mathBuffer.push(line);
+                } else {
+                    result.push(line);
+                }
+            }
+            // If still in display math (unclosed), dump the buffer
+            if (inDisplayMath) {
+                result.push('$');
+                result.push(...mathBuffer);
+            }
+            text = result.join('\n');
+
+            // Also convert single $ with \begin{aligned} or other environments to $$
+            text = text.replace(/\$\s*(\\begin\{[^}]+\}[\s\S]*?\\end\{[^}]+\})\s*\$/g, (match, math) => {
+                return `$$\n${math}\n$$`;
+            });
+
             // Convert display math: standalone [...] on its own lines
             // Match [ at start of line, math content, ] at end of line
             text = text.replace(/^\s*\[\s*\n([\s\S]*?)\n\s*\]\s*$/gm, (match, math) => {
