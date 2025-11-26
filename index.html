@@ -1,0 +1,2601 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MarkTeX - Scientific Markdown Editor</title>
+
+    <!-- MathJax for LaTeX rendering -->
+    <script>
+        window.MathJax = {
+            tex: {
+                inlineMath: [['$', '$'], ['\\(', '\\)']],
+                displayMath: [['$$', '$$'], ['\\[', '\\]']],
+                processEscapes: true
+            },
+            options: {
+                skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
+            }
+        };
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" async></script>
+
+    <!-- Marked.js for Markdown parsing -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+
+    <!-- Print to PDF uses browser's native print -->
+    <!-- No external PDF library needed - browser print gives real text PDF -->
+
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --primary: #2563eb;
+            --primary-dark: #1d4ed8;
+            --bg-light: #f8fafc;
+            --bg-white: #ffffff;
+            --border: #e2e8f0;
+            --text: #1e293b;
+            --text-muted: #64748b;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg-light);
+            color: var(--text);
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Header */
+        .header {
+            background: var(--bg-white);
+            border-bottom: 1px solid var(--border);
+            padding: 12px 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 20px;
+            flex-shrink: 0;
+        }
+
+        .logo {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--primary);
+        }
+
+        .logo span {
+            color: var(--text);
+        }
+
+        .toolbar {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            padding: 8px 16px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            background: var(--bg-white);
+            color: var(--text);
+            font-size: 14px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.15s;
+        }
+
+        .btn:hover {
+            background: var(--bg-light);
+            border-color: var(--primary);
+        }
+
+        .btn-primary {
+            background: var(--primary);
+            color: white;
+            border-color: var(--primary);
+        }
+
+        .btn-primary:hover {
+            background: var(--primary-dark);
+        }
+
+        .divider {
+            width: 1px;
+            height: 24px;
+            background: var(--border);
+            margin: 0 4px;
+        }
+
+        /* Document Settings */
+        .doc-settings {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            flex: 1;
+        }
+
+        .doc-settings input {
+            padding: 10px 14px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            font-size: 14px;
+            flex: 1;
+            min-width: 150px;
+        }
+
+        .doc-settings input#docTitle {
+            font-weight: 600;
+            font-size: 15px;
+            max-width: 400px;
+        }
+
+        .doc-settings input#docAuthors {
+            max-width: 350px;
+        }
+
+        .doc-settings input::placeholder {
+            color: #94a3b8;
+            font-weight: normal;
+        }
+
+        .doc-settings select {
+            padding: 10px 14px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            font-size: 14px;
+            background: var(--bg-white);
+        }
+
+        /* Main Content */
+        .main {
+            flex: 1;
+            display: flex;
+            overflow: hidden;
+        }
+
+        /* Editor Pane */
+        .editor-pane {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            border-right: 1px solid var(--border);
+            min-width: 300px;
+        }
+
+        .pane-header {
+            padding: 10px 16px;
+            background: var(--bg-light);
+            border-bottom: 1px solid var(--border);
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .editor-toolbar {
+            display: flex;
+            gap: 4px;
+        }
+
+        .editor-toolbar button {
+            padding: 4px 8px;
+            border: none;
+            background: transparent;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 13px;
+            color: var(--text-muted);
+        }
+
+        .editor-toolbar button:hover {
+            background: var(--border);
+            color: var(--text);
+        }
+
+        /* Mode toggle buttons */
+        .mode-toggle {
+            display: flex;
+            gap: 2px;
+            background: var(--border);
+            border-radius: 6px;
+            padding: 2px;
+        }
+
+        .mode-toggle button {
+            padding: 6px 12px;
+            border: none;
+            background: transparent;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text-muted);
+            transition: all 0.15s;
+        }
+
+        .mode-toggle button.active {
+            background: white;
+            color: var(--text);
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+
+        #editor {
+            flex: 1;
+            padding: 20px;
+            font-family: 'SF Mono', 'Consolas', 'Monaco', monospace;
+            font-size: 14px;
+            line-height: 1.6;
+            border: none;
+            outline: none;
+            resize: none;
+            background: var(--bg-white);
+            display: block;
+        }
+
+        #editor.hidden {
+            display: none;
+        }
+
+        /* Visual Editor (contenteditable) */
+        #visualEditor {
+            flex: 1;
+            padding: 20px;
+            font-family: 'Times New Roman', Times, serif;
+            font-size: 14px;
+            line-height: 1.6;
+            border: none;
+            outline: none;
+            background: var(--bg-white);
+            overflow: auto;
+            display: none;
+        }
+
+        #visualEditor.visible {
+            display: block;
+        }
+
+        #visualEditor {
+            cursor: text;
+        }
+
+        /* Protected formula blocks in visual editor */
+        #visualEditor .math-formula {
+            background: #f0f7ff;
+            padding: 2px 6px;
+            border-radius: 4px;
+            border: 1px solid #c0d8f0;
+            cursor: not-allowed;
+            user-select: none;
+            display: inline-block;
+        }
+
+        #visualEditor .math-formula.display {
+            display: block;
+            padding: 12px;
+            margin: 8px 0;
+            text-align: center;
+        }
+
+        #visualEditor .math-formula::before {
+            content: '';
+        }
+
+        /* Visual editor metadata display - PROTECTED (not editable) */
+        #visualEditor .visual-meta {
+            text-align: center;
+            padding-bottom: 16px;
+            margin-bottom: 16px;
+            border-bottom: 2px solid var(--border);
+            background: #fffbeb;
+            padding: 16px;
+            border-radius: 8px;
+            border: 1px dashed #f59e0b;
+        }
+
+        #visualEditor .visual-title {
+            font-size: 1.6em;
+            font-weight: bold;
+            color: var(--text);
+            margin-bottom: 8px;
+        }
+
+        #visualEditor .visual-authors {
+            font-size: 1.1em;
+            color: var(--text-muted);
+            margin-bottom: 4px;
+        }
+
+        #visualEditor .visual-date {
+            font-size: 0.9em;
+            color: var(--text-muted);
+        }
+
+        #visualEditor .visual-abstract {
+            font-size: 0.95em;
+            color: var(--text);
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 1px solid #e5e5e5;
+            text-align: justify;
+            line-height: 1.5;
+        }
+
+        #visualEditor .visual-meta::after {
+            content: '(Edit in Source mode)';
+            display: block;
+            font-size: 0.75em;
+            color: #b45309;
+            margin-top: 8px;
+            font-style: italic;
+        }
+
+        #visualEditor h1, #visualEditor h2, #visualEditor h3 {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+
+        #visualEditor h1 { font-size: 1.8em; margin: 0.8em 0 0.4em 0; }
+        #visualEditor h2 { font-size: 1.4em; margin: 0.8em 0 0.4em 0; }
+        #visualEditor h3 { font-size: 1.2em; margin: 0.6em 0 0.3em 0; }
+        #visualEditor p { margin: 0.5em 0; }
+        #visualEditor ul, #visualEditor ol { margin: 0.5em 0 0.5em 1.5em; }
+        #visualEditor blockquote {
+            border-left: 3px solid var(--primary);
+            padding-left: 1em;
+            margin: 0.5em 0;
+            color: var(--text-muted);
+        }
+        #visualEditor pre {
+            background: #f4f4f4;
+            padding: 1em;
+            border-radius: 4px;
+            overflow-x: auto;
+            font-family: 'SF Mono', 'Consolas', monospace;
+            font-size: 13px;
+        }
+        #visualEditor code {
+            background: #f4f4f4;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'SF Mono', 'Consolas', monospace;
+            font-size: 13px;
+        }
+        #visualEditor hr {
+            border: none;
+            border-top: 1px solid var(--border);
+            margin: 1em 0;
+        }
+        #visualEditor .page-break-visual {
+            border: none;
+            border-top: 3px dashed var(--primary);
+            margin: 2em 0;
+            position: relative;
+        }
+        #visualEditor .page-break-visual::after {
+            content: 'PAGE BREAK';
+            position: absolute;
+            top: -10px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: white;
+            padding: 0 12px;
+            font-size: 11px;
+            font-weight: bold;
+            color: var(--primary);
+            font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+        }
+
+        /* Preview Pane */
+        .preview-pane {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background: #94a3b8;
+            min-width: 300px;
+        }
+
+        .preview-container {
+            flex: 1;
+            overflow: auto;
+            padding: 30px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 30px;
+        }
+
+        /* ArXiv-style Paper - fixed height to match print pages */
+        .paper-page {
+            background: white;
+            width: 8.5in;
+            height: 11in;
+            padding: 0.75in;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+            flex-shrink: 0;
+            font-family: 'Computer Modern', 'Times New Roman', Times, serif;
+            position: relative;
+            box-sizing: border-box;
+            overflow: hidden;
+            page-break-after: always;
+        }
+
+        /* Header section - always full width */
+        .paper-header {
+            text-align: center;
+            margin-bottom: 24pt;
+            column-span: all;
+        }
+
+        .paper-title {
+            font-size: 17pt;
+            font-weight: bold;
+            margin-bottom: 14pt;
+            line-height: 1.2;
+        }
+
+        .paper-authors {
+            font-size: 12pt;
+            margin-bottom: 8pt;
+        }
+
+        .paper-affiliation {
+            font-size: 10pt;
+            font-style: italic;
+            color: #555;
+            margin-bottom: 8pt;
+        }
+
+        .paper-date {
+            font-size: 10pt;
+            color: #666;
+        }
+
+        /* Abstract section - full width with indent */
+        .paper-abstract {
+            margin: 0 0.5in 20pt 0.5in;
+            text-align: justify;
+            column-span: all;
+        }
+
+        .paper-abstract-title {
+            font-size: 10pt;
+            font-weight: bold;
+            text-align: center;
+            margin-bottom: 6pt;
+        }
+
+        .paper-abstract-text {
+            font-size: 9pt;
+            line-height: 1.4;
+        }
+
+        /* Body content wrapper */
+        .paper-body {
+            font-size: 10pt;
+            line-height: 1.3;
+            text-align: justify;
+        }
+
+        /* Two-column layout applies to body-columns wrapper inside paper-body */
+        .paper-page.two-column .body-columns {
+            column-count: 2;
+            column-gap: 0.25in;
+        }
+
+        .paper-body h1, .body-columns h1 {
+            font-size: 12pt;
+            font-weight: bold;
+            margin: 14pt 0 8pt 0;
+            text-transform: uppercase;
+        }
+
+        .paper-body h2 {
+            font-size: 11pt;
+            font-weight: bold;
+            margin: 12pt 0 6pt 0;
+        }
+
+        .paper-body h3 {
+            font-size: 10pt;
+            font-weight: bold;
+            font-style: italic;
+            margin: 10pt 0 4pt 0;
+        }
+
+        .paper-body p {
+            margin-bottom: 6pt;
+            text-indent: 1.5em;
+        }
+
+        .paper-body p:first-child,
+        .paper-body h1 + p,
+        .paper-body h2 + p,
+        .paper-body h3 + p,
+        .paper-body ul + p,
+        .paper-body ol + p,
+        .paper-body blockquote + p {
+            text-indent: 0;
+        }
+
+        .paper-body ul, .paper-body ol {
+            margin: 6pt 0 6pt 20pt;
+        }
+
+        .paper-body li {
+            margin-bottom: 3pt;
+        }
+
+        .paper-body pre {
+            background: #f8f8f8;
+            padding: 6pt;
+            font-size: 8pt;
+            overflow-x: auto;
+            margin: 6pt 0;
+            border: 1px solid #ddd;
+        }
+
+        .paper-body code {
+            font-family: 'Courier New', monospace;
+            background: #f4f4f4;
+            padding: 1pt 3pt;
+            font-size: 9pt;
+        }
+
+        .paper-body pre code {
+            background: none;
+            padding: 0;
+        }
+
+        .paper-body blockquote {
+            border-left: 2px solid #999;
+            padding-left: 10pt;
+            margin: 6pt 0;
+            color: #555;
+            font-style: italic;
+        }
+
+        .paper-body hr, .body-columns hr {
+            border: none;
+            border-top: 1px solid #ccc;
+            margin: 12pt 0;
+        }
+
+        /* Math display */
+        .MathJax {
+            font-size: 100% !important;
+        }
+
+        mjx-container[jax="CHTML"][display="true"] {
+            margin: 8pt 0 !important;
+            text-align: center;
+        }
+
+        /* Resize handle */
+        .resize-handle {
+            width: 6px;
+            background: var(--border);
+            cursor: col-resize;
+            transition: background 0.15s;
+        }
+
+        .resize-handle:hover {
+            background: var(--primary);
+        }
+
+        /* Modal */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.2s;
+        }
+
+        .modal-overlay.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .modal {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            max-width: 500px;
+            width: 90%;
+            max-height: 80vh;
+            overflow: auto;
+        }
+
+        .modal h2 {
+            margin-bottom: 16px;
+        }
+
+        .modal-actions {
+            display: flex;
+            gap: 8px;
+            justify-content: flex-end;
+            margin-top: 20px;
+        }
+
+        /* Toast notifications */
+        .toast {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: #1e293b;
+            color: white;
+            padding: 12px 20px;
+            border-radius: 8px;
+            font-size: 14px;
+            transform: translateY(100px);
+            opacity: 0;
+            transition: all 0.3s;
+            z-index: 1001;
+        }
+
+        .toast.show {
+            transform: translateY(0);
+            opacity: 1;
+        }
+
+        /* Help panel */
+        .help-content {
+            font-size: 13px;
+            line-height: 1.5;
+        }
+
+        .help-content h3 {
+            margin: 16px 0 8px 0;
+            font-size: 14px;
+        }
+
+        .help-content code {
+            background: #f1f5f9;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 12px;
+        }
+
+        .help-content table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 8px 0;
+        }
+
+        .help-content td {
+            padding: 6px 8px;
+            border: 1px solid var(--border);
+            font-size: 12px;
+        }
+
+        .help-content td:first-child {
+            font-family: monospace;
+            background: #f8fafc;
+            width: 40%;
+        }
+
+        /* History Sidebar (Google Docs style) */
+        .history-sidebar {
+            width: 0;
+            min-width: 0;
+            background: var(--bg-white);
+            border-right: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            transition: width 0.3s ease, min-width 0.3s ease;
+        }
+
+        .history-sidebar.open {
+            width: 280px;
+            min-width: 280px;
+        }
+
+        .history-sidebar-header {
+            padding: 16px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-weight: 600;
+            font-size: 14px;
+            background: var(--bg-light);
+        }
+
+        .history-close-btn {
+            background: none;
+            border: none;
+            font-size: 20px;
+            cursor: pointer;
+            color: var(--text-muted);
+            padding: 0 4px;
+            line-height: 1;
+        }
+
+        .history-close-btn:hover {
+            color: var(--text);
+        }
+
+        .history-sidebar-content {
+            flex: 1;
+            overflow-y: auto;
+        }
+
+        .history-date-group {
+            padding: 10px 16px 6px;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            color: var(--text-muted);
+            background: var(--bg-light);
+            position: sticky;
+            top: 0;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .history-item {
+            padding: 12px 16px;
+            border-bottom: 1px solid var(--border);
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+
+        .history-item:hover {
+            background: var(--bg-light);
+        }
+
+        .history-item.selected {
+            background: #e0e7ff;
+            border-left: 3px solid var(--primary);
+        }
+
+        .history-item.previewing {
+            background: #fef3c7;
+            border-left: 3px solid #f59e0b;
+        }
+
+        .history-item-time {
+            font-size: 12px;
+            color: var(--text-muted);
+            font-family: monospace;
+            margin-bottom: 4px;
+        }
+
+        .history-item-title {
+            font-size: 13px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            margin-bottom: 6px;
+        }
+
+        .history-item-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .history-preview-banner {
+            background: #fef3c7;
+            border-bottom: 1px solid #f59e0b;
+            padding: 10px 16px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+        }
+
+        .history-preview-banner span {
+            font-size: 13px;
+            color: #92400e;
+        }
+
+        .history-preview-banner button {
+            padding: 4px 12px;
+            font-size: 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            border: 1px solid;
+        }
+
+        .history-preview-banner .back-btn {
+            background: white;
+            border-color: #d1d5db;
+            color: #374151;
+        }
+
+        .history-preview-banner .restore-btn {
+            background: var(--primary);
+            border-color: var(--primary);
+            color: white;
+        }
+
+        .history-restore-btn {
+            padding: 4px 10px;
+            font-size: 11px;
+            background: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        .history-restore-btn:hover {
+            background: var(--primary-dark);
+        }
+
+        .history-preview-btn {
+            padding: 4px 10px;
+            font-size: 11px;
+            background: var(--bg-light);
+            color: var(--text);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        .history-preview-btn:hover {
+            background: var(--border);
+        }
+
+        .history-empty {
+            padding: 40px 20px;
+            text-align: center;
+            color: var(--text-muted);
+            font-size: 13px;
+        }
+
+        /* Print styles - must match preview exactly */
+        @media print {
+            * {
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+            }
+
+            body {
+                background: white !important;
+                margin: 0 !important;
+                padding: 0 !important;
+            }
+
+            .header, .editor-pane, .resize-handle, .pane-header, .modal-overlay, .toast {
+                display: none !important;
+            }
+
+            .main {
+                display: block !important;
+                overflow: visible !important;
+            }
+
+            .preview-pane {
+                background: white !important;
+                flex: none !important;
+                width: 100% !important;
+                overflow: visible !important;
+            }
+
+            .preview-container {
+                padding: 0 !important;
+                overflow: visible !important;
+                display: block !important;
+                gap: 0 !important;
+            }
+
+            .paper-page {
+                box-shadow: none !important;
+                width: 8.5in !important;
+                height: 11in !important;
+                padding: 0.75in !important;
+                margin: 0 !important;
+                overflow: hidden !important;
+                page-break-after: always;
+                break-after: page;
+                page-break-inside: avoid;
+                break-inside: avoid;
+            }
+
+            .paper-page:last-child {
+                page-break-after: avoid;
+                break-after: avoid;
+            }
+
+            /* Ensure columns print correctly */
+            .paper-page.two-column .body-columns {
+                column-count: 2 !important;
+                column-gap: 0.25in !important;
+            }
+
+            /* Avoid breaks inside elements */
+            .paper-body h1, .paper-body h2, .paper-body h3 {
+                page-break-after: avoid;
+                break-after: avoid;
+            }
+
+            .paper-body p, .paper-body li {
+                page-break-inside: avoid;
+                break-inside: avoid;
+            }
+
+            mjx-container {
+                page-break-inside: avoid;
+                break-inside: avoid;
+            }
+
+            /* Hide overflow warning in print */
+            .paper-page.has-overflow::after {
+                display: none !important;
+            }
+        }
+
+        @page {
+            size: letter;
+            margin: 0;
+        }
+    </style>
+</head>
+<body>
+    <header class="header">
+        <div class="logo">Mark<span>TeX</span></div>
+
+        <div class="toolbar" style="flex:1;justify-content:flex-end;">
+            <select id="columnLayout" class="btn">
+                <option value="single">Single Column</option>
+                <option value="two" selected>Two Column (ArXiv)</option>
+            </select>
+            <div class="divider"></div>
+            <button class="btn" onclick="newDocument()" title="New Document">New</button>
+            <button class="btn" onclick="openMarkdown()" title="Open">Open</button>
+            <button class="btn" onclick="saveMarkdown()" title="Save">Save .md</button>
+            <div class="divider"></div>
+            <button class="btn" onclick="insertMetadata()" title="Insert Title/Authors/Abstract">Metadata</button>
+            <button class="btn" onclick="insertPageBreak()" title="Insert Page Break">Page Break</button>
+            <button class="btn" onclick="insertMathBlock()" title="Insert Math Block">Math</button>
+            <div class="divider"></div>
+            <button class="btn" onclick="toggleHistorySidebar()" id="historyBtn">History</button>
+            <button class="btn" onclick="showHelp()">Help</button>
+            <button class="btn btn-primary" onclick="exportPDF()">Export PDF</button>
+        </div>
+        <input type="file" id="fileInput" accept=".md,.txt,.markdown" style="display:none" onchange="handleFileOpen(event)">
+    </header>
+
+    <main class="main">
+        <!-- History Sidebar (Google Docs style) -->
+        <div class="history-sidebar" id="historySidebar">
+            <div class="history-sidebar-header">
+                <span>Version History</span>
+                <button class="history-close-btn" onclick="toggleHistorySidebar()">&times;</button>
+            </div>
+            <div class="history-sidebar-content" id="historyList">
+                <!-- Version items populated by JS -->
+            </div>
+        </div>
+
+        <div class="editor-pane">
+            <div class="pane-header">
+                <span>Editor <span id="saveStatus" style="font-weight:normal;color:#22c55e;margin-left:8px;"></span></span>
+                <div style="display:flex;gap:12px;align-items:center;">
+                    <div class="mode-toggle">
+                        <button id="visualModeBtn" class="active" onclick="setEditorMode('visual')">Visual</button>
+                        <button id="markdownModeBtn" onclick="setEditorMode('markdown')">Source</button>
+                    </div>
+                    <div class="editor-toolbar">
+                        <button onclick="formatText('bold')" title="Bold"><strong>B</strong></button>
+                        <button onclick="formatText('italic')" title="Italic"><em>I</em></button>
+                        <button onclick="formatText('code')" title="Code">&lt;/&gt;</button>
+                        <button onclick="insertInlineMath()" title="Inline Math">$x$</button>
+                    </div>
+                </div>
+            </div>
+            <!-- Visual Editor (editable text, protected formulas and metadata) -->
+            <div id="visualEditor" class="visible" contenteditable="true"></div>
+            <!-- Raw Markdown Editor -->
+            <textarea id="editor" class="hidden" placeholder="Raw Markdown mode..."></textarea>
+        </div>
+
+        <div class="resize-handle" id="resizeHandle"></div>
+
+        <div class="preview-pane">
+            <div class="pane-header">
+                <span>PDF Preview</span>
+                <span id="pageCount" style="font-weight:normal;"></span>
+            </div>
+            <div class="history-preview-banner" id="historyPreviewBanner" style="display:none;">
+                <span id="previewingVersionTime">Previewing version from 2:30 PM</span>
+                <div>
+                    <button class="back-btn" onclick="exitHistoryPreview()">Back to Current</button>
+                    <button class="restore-btn" onclick="restorePreviewingVersion()">Restore This Version</button>
+                </div>
+            </div>
+            <div class="preview-container" id="previewContainer">
+            </div>
+        </div>
+    </main>
+
+    <!-- Help Modal -->
+    <div class="modal-overlay" id="helpModal">
+        <div class="modal">
+            <h2>MarkTeX Quick Reference</h2>
+            <div class="help-content">
+                <h3>Editor Modes</h3>
+                <p><strong>Visual:</strong> WYSIWYG editing - type and format visually</p>
+                <p><strong>Markdown:</strong> Raw markdown source editing</p>
+
+                <h3>Math (LaTeX)</h3>
+                <table>
+                    <tr><td>$x^2$</td><td>Inline math</td></tr>
+                    <tr><td>$$\sum_{i=1}^n$$</td><td>Block math</td></tr>
+                </table>
+
+                <h3>Page Breaks</h3>
+                <p>Click "Page Break" button or type <code>===pagebreak===</code></p>
+
+                <h3>Abstract</h3>
+                <p>Start your document with <code>## Abstract</code> for proper ArXiv formatting.</p>
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-primary" onclick="closeHelp()">Got it!</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="toast" id="toast"></div>
+
+    <script>
+        // Elements
+        const editor = document.getElementById('editor');
+        const visualEditor = document.getElementById('visualEditor');
+        const previewContainer = document.getElementById('previewContainer');
+        const columnLayout = document.getElementById('columnLayout');
+        const helpModal = document.getElementById('helpModal');
+        const resizeHandle = document.getElementById('resizeHandle');
+        const toast = document.getElementById('toast');
+        const saveStatus = document.getElementById('saveStatus');
+        const fileInput = document.getElementById('fileInput');
+        const pageCountEl = document.getElementById('pageCount');
+        const visualModeBtn = document.getElementById('visualModeBtn');
+        const markdownModeBtn = document.getElementById('markdownModeBtn');
+        const historySidebar = document.getElementById('historySidebar');
+        const historyList = document.getElementById('historyList');
+
+        // Editor state
+        let editorMode = 'visual';
+        // Store markdown source separately to avoid conversion issues
+        let markdownSource = '';
+        // Track formula positions for protection
+        let formulaPositions = [];
+
+        // LocalStorage keys
+        const STORAGE_KEYS = {
+            content: 'marktex_content',
+            title: 'marktex_title',
+            authors: 'marktex_authors',
+            layout: 'marktex_layout',
+            lastSaved: 'marktex_lastSaved',
+            versions: 'marktex_versions',
+            versionBase: 'marktex_version_base'
+        };
+
+        let autoSaveTimer = null;
+        const AUTO_SAVE_DELAY = 1000;
+
+        // Version history settings
+        const VERSION_GAP_MS = 3 * 60 * 1000; // 3 minutes - start new version if gap > this
+        const MAX_VERSIONS = 50; // Maximum versions to keep
+
+        // History preview state
+        let previewingVersionId = null;
+        const historyPreviewBanner = document.getElementById('historyPreviewBanner');
+        const previewingVersionTime = document.getElementById('previewingVersionTime');
+        let lastVersionTime = 0;
+        let currentVersionId = null;
+
+        // ============ DIFF ALGORITHM ============
+        // Simple line-based diff for efficient storage
+
+        function computeDiff(oldText, newText) {
+            const oldLines = oldText.split('\n');
+            const newLines = newText.split('\n');
+            const diff = [];
+
+            // Simple LCS-based diff
+            const lcs = computeLCS(oldLines, newLines);
+            let oldIdx = 0, newIdx = 0, lcsIdx = 0;
+
+            while (oldIdx < oldLines.length || newIdx < newLines.length) {
+                if (lcsIdx < lcs.length && oldIdx < oldLines.length && oldLines[oldIdx] === lcs[lcsIdx]) {
+                    if (newIdx < newLines.length && newLines[newIdx] === lcs[lcsIdx]) {
+                        // Line unchanged
+                        diff.push({ type: 'keep', line: oldIdx });
+                        oldIdx++;
+                        newIdx++;
+                        lcsIdx++;
+                    } else {
+                        // Line added in new
+                        diff.push({ type: 'add', content: newLines[newIdx] });
+                        newIdx++;
+                    }
+                } else if (lcsIdx < lcs.length && newIdx < newLines.length && newLines[newIdx] === lcs[lcsIdx]) {
+                    // Line removed from old
+                    diff.push({ type: 'del', line: oldIdx });
+                    oldIdx++;
+                } else if (newIdx < newLines.length) {
+                    diff.push({ type: 'add', content: newLines[newIdx] });
+                    newIdx++;
+                } else if (oldIdx < oldLines.length) {
+                    diff.push({ type: 'del', line: oldIdx });
+                    oldIdx++;
+                }
+            }
+
+            return diff;
+        }
+
+        function computeLCS(a, b) {
+            const m = a.length, n = b.length;
+            const dp = Array(m + 1).fill(null).map(() => Array(n + 1).fill(0));
+
+            for (let i = 1; i <= m; i++) {
+                for (let j = 1; j <= n; j++) {
+                    if (a[i-1] === b[j-1]) {
+                        dp[i][j] = dp[i-1][j-1] + 1;
+                    } else {
+                        dp[i][j] = Math.max(dp[i-1][j], dp[i][j-1]);
+                    }
+                }
+            }
+
+            // Backtrack to find LCS
+            const lcs = [];
+            let i = m, j = n;
+            while (i > 0 && j > 0) {
+                if (a[i-1] === b[j-1]) {
+                    lcs.unshift(a[i-1]);
+                    i--; j--;
+                } else if (dp[i-1][j] > dp[i][j-1]) {
+                    i--;
+                } else {
+                    j--;
+                }
+            }
+            return lcs;
+        }
+
+        function applyDiff(baseText, diff) {
+            const baseLines = baseText.split('\n');
+            const result = [];
+
+            for (const op of diff) {
+                if (op.type === 'keep') {
+                    result.push(baseLines[op.line]);
+                } else if (op.type === 'add') {
+                    result.push(op.content);
+                }
+                // 'del' operations are skipped (line removed)
+            }
+
+            return result.join('\n');
+        }
+
+        // ============ VERSION HISTORY ============
+
+        function getVersions() {
+            try {
+                const data = localStorage.getItem(STORAGE_KEYS.versions);
+                return data ? JSON.parse(data) : [];
+            } catch (e) {
+                return [];
+            }
+        }
+
+        function saveVersions(versions) {
+            try {
+                localStorage.setItem(STORAGE_KEYS.versions, JSON.stringify(versions));
+            } catch (e) {
+                console.error('Failed to save versions:', e);
+                // If storage is full, remove oldest versions
+                if (e.name === 'QuotaExceededError') {
+                    versions = versions.slice(-Math.floor(versions.length / 2));
+                    localStorage.setItem(STORAGE_KEYS.versions, JSON.stringify(versions));
+                }
+            }
+        }
+
+        function getBaseContent() {
+            return localStorage.getItem(STORAGE_KEYS.versionBase) || '';
+        }
+
+        function setBaseContent(content) {
+            localStorage.setItem(STORAGE_KEYS.versionBase, content);
+        }
+
+        function createVersion(content, title, authors) {
+            const now = Date.now();
+            const versions = getVersions();
+            const baseContent = getBaseContent();
+
+            // Check if we should start a new version or update existing
+            const timeSinceLastVersion = now - lastVersionTime;
+            const shouldStartNewVersion = timeSinceLastVersion > VERSION_GAP_MS || versions.length === 0;
+
+            if (shouldStartNewVersion) {
+                // Create new version
+                const diff = computeDiff(baseContent, content);
+
+                const version = {
+                    id: now,
+                    timestamp: now,
+                    title: title || 'Untitled',
+                    authors: authors || '',
+                    diff: diff,
+                    // Store small snapshot every 10 versions for faster reconstruction
+                    isSnapshot: versions.length % 10 === 0,
+                    snapshot: versions.length % 10 === 0 ? content : null
+                };
+
+                versions.push(version);
+
+                // Trim old versions
+                while (versions.length > MAX_VERSIONS) {
+                    versions.shift();
+                }
+
+                saveVersions(versions);
+                currentVersionId = now;
+
+                // Update base content periodically
+                if (versions.length % 10 === 0) {
+                    setBaseContent(content);
+                }
+            } else if (currentVersionId) {
+                // Update existing version's diff
+                const lastVersion = versions.find(v => v.id === currentVersionId);
+                if (lastVersion) {
+                    lastVersion.diff = computeDiff(baseContent, content);
+                    lastVersion.title = title || lastVersion.title;
+                    lastVersion.authors = authors || lastVersion.authors;
+                    saveVersions(versions);
+                }
+            }
+
+            lastVersionTime = now;
+        }
+
+        function reconstructVersion(versionId) {
+            const versions = getVersions();
+            const versionIdx = versions.findIndex(v => v.id === versionId);
+            if (versionIdx === -1) return null;
+
+            const version = versions[versionIdx];
+
+            // Find nearest snapshot
+            let baseContent = getBaseContent();
+            let startIdx = 0;
+
+            for (let i = versionIdx; i >= 0; i--) {
+                if (versions[i].isSnapshot && versions[i].snapshot) {
+                    baseContent = versions[i].snapshot;
+                    startIdx = i;
+                    break;
+                }
+            }
+
+            // Apply diffs from snapshot to target version
+            let content = baseContent;
+            for (let i = startIdx; i <= versionIdx; i++) {
+                if (versions[i].diff) {
+                    content = applyDiff(getBaseContent(), versions[i].diff);
+                }
+            }
+
+            return {
+                content,
+                title: version.title,
+                authors: version.authors,
+                timestamp: version.timestamp
+            };
+        }
+
+        function restoreVersion(versionId) {
+            exitHistoryPreview(); // Exit preview mode first
+            const restored = reconstructVersion(versionId);
+            if (restored) {
+                setMarkdown(restored.content);
+                updatePreview();
+                saveToLocalStorage();
+                showToast('Version restored');
+            }
+        }
+
+        // Preview a version without restoring it
+        function previewVersion(versionId) {
+            const restored = reconstructVersion(versionId);
+            if (!restored) return;
+
+            previewingVersionId = versionId;
+
+            // Update banner
+            const versions = JSON.parse(localStorage.getItem(STORAGE_KEYS.versions) || '[]');
+            const version = versions.find(v => v.id === versionId);
+            if (version) {
+                previewingVersionTime.textContent = `Previewing: ${formatVersionTime(version.timestamp)}`;
+            }
+            historyPreviewBanner.style.display = 'flex';
+
+            // Update preview with this version's content
+            updatePreviewWithContent(restored.content);
+
+            // Highlight the selected item in history
+            document.querySelectorAll('.history-item').forEach(item => {
+                item.classList.remove('previewing');
+                if (parseInt(item.dataset.versionId) === versionId) {
+                    item.classList.add('previewing');
+                }
+            });
+        }
+
+        // Exit history preview mode
+        function exitHistoryPreview() {
+            if (previewingVersionId === null) return;
+
+            previewingVersionId = null;
+            historyPreviewBanner.style.display = 'none';
+
+            // Remove previewing highlight
+            document.querySelectorAll('.history-item').forEach(item => {
+                item.classList.remove('previewing');
+            });
+
+            // Restore current content preview
+            updatePreview();
+        }
+
+        // Restore the currently previewing version
+        function restorePreviewingVersion() {
+            if (previewingVersionId !== null) {
+                const versionId = previewingVersionId;
+                exitHistoryPreview();
+                restoreVersion(versionId);
+            }
+        }
+
+        // Update preview with specific content (for history preview)
+        function updatePreviewWithContent(content) {
+            const twoCol = columnLayout.value === 'two';
+
+            // Extract metadata from content
+            const metadata = extractMetadata(content);
+            const contentWithoutMeta = metadata.content;
+
+            // Split by manual page breaks first
+            const manualPages = contentWithoutMeta.split(/===pagebreak===/);
+
+            previewContainer.innerHTML = '';
+
+            // Process each manual page section
+            manualPages.forEach((pageContent, manualIdx) => {
+                let headerHtml = '';
+                let abstractHtml = '';
+                let bodyContent = pageContent;
+
+                if (manualIdx === 0) {
+                    const hasTitle = metadata.title && metadata.title.trim();
+                    const hasAuthors = metadata.authors && metadata.authors.trim();
+                    const titleHtml = hasTitle
+                        ? escapeHtml(metadata.title)
+                        : '<span style="color:#999;font-style:italic;">No title</span>';
+                    const authorsHtml = hasAuthors
+                        ? escapeHtml(metadata.authors)
+                        : '<span style="color:#999;font-size:10pt;font-style:italic;">No authors</span>';
+                    headerHtml = `<div class="paper-header">
+                        <div class="paper-title">${titleHtml}</div>
+                        <div class="paper-authors">${authorsHtml}</div>
+                    </div>`;
+
+                    if (metadata.abstract) {
+                        const { text: protectedAbstract, mathBlocks: abstractMath } = protectMath(metadata.abstract);
+                        let absHtml = marked.parse(protectedAbstract);
+                        absHtml = restoreMath(absHtml, abstractMath);
+                        absHtml = absHtml.replace(/^<p>([\s\S]*)<\/p>\s*$/, '$1');
+                        abstractHtml = `<div class="paper-abstract">
+                            <div class="paper-abstract-title">Abstract</div>
+                            <div class="paper-abstract-text">${absHtml}</div>
+                        </div>`;
+                    }
+                }
+
+                const { text: protectedBody, mathBlocks: bodyMath } = protectMath(bodyContent);
+                let bodyHtml = marked.parse(protectedBody);
+                bodyHtml = restoreMath(bodyHtml, bodyMath);
+
+                createPaginatedPages(headerHtml, abstractHtml, bodyHtml, twoCol, manualIdx === 0);
+            });
+
+            const pageCount = previewContainer.querySelectorAll('.paper-page').length;
+            pageCountEl.textContent = `${pageCount} page${pageCount > 1 ? 's' : ''}`;
+
+            renderMathIn(previewContainer);
+        }
+
+        function formatVersionTime(timestamp) {
+            const date = new Date(timestamp);
+            const now = new Date();
+            const isToday = date.toDateString() === now.toDateString();
+            const yesterday = new Date(now);
+            yesterday.setDate(yesterday.getDate() - 1);
+            const isYesterday = date.toDateString() === yesterday.toDateString();
+
+            const time = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+            if (isToday) {
+                return `Today ${time}`;
+            } else if (isYesterday) {
+                return `Yesterday ${time}`;
+            } else {
+                return date.toLocaleDateString([], { month: 'short', day: 'numeric' }) + ' ' + time;
+            }
+        }
+
+        // Toggle history sidebar
+        function toggleHistorySidebar() {
+            const isOpen = historySidebar.classList.toggle('open');
+            if (isOpen) {
+                updateHistorySidebar();
+            }
+        }
+
+        function updateHistorySidebar() {
+            const versions = getVersions();
+
+            if (versions.length === 0) {
+                historyList.innerHTML = '<div class="history-empty">No versions saved yet.<br><br>Versions are created automatically as you edit.</div>';
+                return;
+            }
+
+            // Group versions by day
+            const grouped = {};
+            versions.slice().reverse().forEach(v => {
+                const date = new Date(v.timestamp).toDateString();
+                if (!grouped[date]) grouped[date] = [];
+                grouped[date].push(v);
+            });
+
+            let html = '';
+            for (const [date, dayVersions] of Object.entries(grouped)) {
+                const displayDate = new Date(date);
+                const now = new Date();
+                let dateLabel;
+                if (displayDate.toDateString() === now.toDateString()) {
+                    dateLabel = 'Today';
+                } else {
+                    const yesterday = new Date(now);
+                    yesterday.setDate(yesterday.getDate() - 1);
+                    if (displayDate.toDateString() === yesterday.toDateString()) {
+                        dateLabel = 'Yesterday';
+                    } else {
+                        dateLabel = displayDate.toLocaleDateString([], { weekday: 'long', month: 'short', day: 'numeric' });
+                    }
+                }
+
+                html += `<div class="history-date-group">${dateLabel}</div>`;
+
+                dayVersions.forEach(v => {
+                    const time = new Date(v.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                    const titlePreview = extractTitleFromMarkdown(v) || 'Untitled';
+                    html += `
+                        <div class="history-item" data-version-id="${v.id}" onclick="previewVersion(${v.id})">
+                            <div class="history-item-time">${time}</div>
+                            <div class="history-item-title">${escapeHtml(titlePreview.substring(0, 40))}${titlePreview.length > 40 ? '...' : ''}</div>
+                            <div class="history-item-actions">
+                                <button class="history-restore-btn" onclick="event.stopPropagation(); restoreVersion(${v.id})">Restore</button>
+                            </div>
+                        </div>
+                    `;
+                });
+            }
+            historyList.innerHTML = html;
+        }
+
+        // Extract title from markdown frontmatter
+        function extractTitleFromMarkdown(version) {
+            if (version.title && version.title !== 'Untitled') return version.title;
+            // Try to extract from content
+            const restored = reconstructVersion(version.id);
+            if (restored && restored.content) {
+                const match = restored.content.match(/^@title:\s*(.+)$/m);
+                if (match) return match[1].trim();
+                // Fallback to first heading
+                const h1Match = restored.content.match(/^#\s+(.+)$/m);
+                if (h1Match) return h1Match[1].trim();
+            }
+            return 'Untitled';
+        }
+
+        // For backward compatibility
+        function showVersionHistory() {
+            toggleHistorySidebar();
+        }
+
+        function closeVersionHistory() {
+            exitHistoryPreview();
+            historySidebar.classList.remove('open');
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // Configure marked
+        marked.setOptions({ breaks: true, gfm: true });
+
+        // Get current markdown - ALWAYS from the source
+        function getMarkdown() {
+            if (editorMode === 'markdown') {
+                markdownSource = editor.value;
+            }
+            return markdownSource;
+        }
+
+        // Set markdown content
+        function setMarkdown(md) {
+            markdownSource = md;
+            editor.value = md;
+            updateVisualEditor();
+        }
+
+        // Update visual editor from markdown source (READ-ONLY preview)
+        function updateVisualEditor() {
+            // Convert ChatGPT bracket notation in source first
+            const normalizedMd = convertChatGPTMath(markdownSource);
+            visualEditor.innerHTML = markdownToVisualHtml(normalizedMd);
+            renderMathIn(visualEditor);
+        }
+
+        // Convert Markdown to HTML for visual editor display
+        // Shows everything rendered - this is READ-ONLY preview
+        function markdownToVisualHtml(md) {
+            let html = md;
+
+            // Extract and render metadata as styled header
+            const metadata = extractMetadata(md);
+            let metaHtml = '';
+            if (metadata.title || metadata.authors || metadata.abstract) {
+                metaHtml = '<div class="visual-meta" contenteditable="false">';
+                if (metadata.title) {
+                    metaHtml += `<div class="visual-title">${escapeHtml(metadata.title)}</div>`;
+                }
+                if (metadata.authors) {
+                    metaHtml += `<div class="visual-authors">${escapeHtml(metadata.authors)}</div>`;
+                }
+                if (metadata.date) {
+                    metaHtml += `<div class="visual-date">${escapeHtml(metadata.date)}</div>`;
+                }
+                if (metadata.abstract) {
+                    metaHtml += `<div class="visual-abstract"><strong>Abstract:</strong> ${escapeHtml(metadata.abstract)}</div>`;
+                }
+                metaHtml += '</div>';
+            }
+
+            // Use content without metadata for body
+            html = metadata.content;
+
+            // Handle page breaks
+            html = html.replace(/===pagebreak===/g, '<hr class="page-break-visual">');
+
+            // Protect math - keep as-is for MathJax to render
+            const mathBlocks = [];
+            let idx = 0;
+
+            // Display math $$...$$ and \[...\]
+            html = html.replace(/\$\$([\s\S]*?)\$\$/g, (m, math) => {
+                mathBlocks.push({ type: 'display', content: math, original: m });
+                return `%%VMATH${idx++}%%`;
+            });
+            html = html.replace(/\\\[([\s\S]*?)\\\]/g, (m, math) => {
+                mathBlocks.push({ type: 'display', content: math, original: m });
+                return `%%VMATH${idx++}%%`;
+            });
+
+            // Inline math $...$ and \(...\)
+            html = html.replace(/\$([^\$\n]+?)\$/g, (m, math) => {
+                mathBlocks.push({ type: 'inline', content: math, original: m });
+                return `%%VMATH${idx++}%%`;
+            });
+            html = html.replace(/\\\(([\s\S]*?)\\\)/g, (m, math) => {
+                mathBlocks.push({ type: 'inline', content: math, original: m });
+                return `%%VMATH${idx++}%%`;
+            });
+
+            // Parse markdown
+            html = marked.parse(html);
+
+            // Restore math with styled wrappers - contenteditable="false" to protect them
+            mathBlocks.forEach((block, i) => {
+                const tag = block.type === 'display' ? 'div' : 'span';
+                const cssClass = block.type === 'display' ? 'math-formula display' : 'math-formula';
+                // Store original math in data attribute for sync back
+                const escapedOriginal = escapeAttr(block.original);
+                const mathHtml = `<${tag} class="${cssClass}" contenteditable="false" data-math="${escapedOriginal}">${block.original}</${tag}>`;
+                html = html.replace(`%%VMATH${i}%%`, mathHtml);
+            });
+
+            // Prepend metadata header
+            return metaHtml + html;
+        }
+
+        function escapeAttr(str) {
+            return str.replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        }
+
+        function unescapeAttr(str) {
+            return str.replace(/&quot;/g, '"').replace(/&lt;/g, '<').replace(/&gt;/g, '>');
+        }
+
+        // Sync visual editor changes back to markdown source
+        // Preserves metadata tags and formulas exactly as they were
+        function syncVisualToMarkdown() {
+            // Get the current metadata from markdown source (these are protected)
+            const currentMetadata = extractMetadata(markdownSource);
+
+            // Convert visual editor HTML back to markdown
+            const visualContent = visualEditor.cloneNode(true);
+
+            // Remove the metadata section (it's protected, use original)
+            const metaDiv = visualContent.querySelector('.visual-meta');
+            if (metaDiv) {
+                metaDiv.remove();
+            }
+
+            // Convert HTML to markdown
+            const newBodyMd = htmlToMarkdown(visualContent);
+
+            // Reconstruct full markdown with original metadata tags
+            let fullMd = '';
+            if (currentMetadata.title) {
+                fullMd += `@title: ${currentMetadata.title}\n`;
+            }
+            if (currentMetadata.authors) {
+                fullMd += `@authors: ${currentMetadata.authors}\n`;
+            }
+            if (currentMetadata.date) {
+                fullMd += `@date: ${currentMetadata.date}\n`;
+            }
+            if (currentMetadata.abstract) {
+                fullMd += `@abstract: ${currentMetadata.abstract}\n`;
+            }
+            if (fullMd) {
+                fullMd += '\n';
+            }
+            fullMd += newBodyMd;
+
+            markdownSource = fullMd;
+        }
+
+        // Convert HTML from visual editor back to markdown
+        function htmlToMarkdown(container) {
+            let md = '';
+
+            function processNode(node) {
+                if (node.nodeType === Node.TEXT_NODE) {
+                    return node.textContent;
+                }
+
+                if (node.nodeType !== Node.ELEMENT_NODE) {
+                    return '';
+                }
+
+                const tag = node.tagName.toLowerCase();
+
+                // Protected math formulas - use original from data attribute
+                if (node.classList.contains('math-formula')) {
+                    const originalMath = node.getAttribute('data-math');
+                    if (originalMath) {
+                        return unescapeAttr(originalMath);
+                    }
+                    return node.textContent;
+                }
+
+                // Page breaks
+                if (node.classList.contains('page-break-visual')) {
+                    return '\n===pagebreak===\n';
+                }
+
+                let content = '';
+                for (const child of node.childNodes) {
+                    content += processNode(child);
+                }
+
+                switch (tag) {
+                    case 'h1': return `# ${content.trim()}\n\n`;
+                    case 'h2': return `## ${content.trim()}\n\n`;
+                    case 'h3': return `### ${content.trim()}\n\n`;
+                    case 'h4': return `#### ${content.trim()}\n\n`;
+                    case 'h5': return `##### ${content.trim()}\n\n`;
+                    case 'h6': return `###### ${content.trim()}\n\n`;
+                    case 'p': return `${content.trim()}\n\n`;
+                    case 'br': return '\n';
+                    case 'strong':
+                    case 'b': return `**${content}**`;
+                    case 'em':
+                    case 'i': return `*${content}*`;
+                    case 'code':
+                        if (node.parentElement && node.parentElement.tagName.toLowerCase() === 'pre') {
+                            return content;
+                        }
+                        return `\`${content}\``;
+                    case 'pre': return `\`\`\`\n${content.trim()}\n\`\`\`\n\n`;
+                    case 'blockquote':
+                        return content.split('\n').map(line => `> ${line}`).join('\n') + '\n\n';
+                    case 'ul':
+                        return content + '\n';
+                    case 'ol':
+                        return content + '\n';
+                    case 'li':
+                        const parent = node.parentElement;
+                        if (parent && parent.tagName.toLowerCase() === 'ol') {
+                            const index = Array.from(parent.children).indexOf(node) + 1;
+                            return `${index}. ${content.trim()}\n`;
+                        }
+                        return `- ${content.trim()}\n`;
+                    case 'a':
+                        const href = node.getAttribute('href') || '';
+                        return `[${content}](${href})`;
+                    case 'hr':
+                        return '\n---\n\n';
+                    case 'div':
+                    case 'span':
+                        return content;
+                    default:
+                        return content;
+                }
+            }
+
+            for (const child of container.childNodes) {
+                md += processNode(child);
+            }
+
+            // Clean up extra newlines
+            return md.replace(/\n{3,}/g, '\n\n').trim();
+        }
+
+        // Set editor mode
+        function setEditorMode(mode) {
+            // Always save content when leaving current mode
+            if (editorMode === 'markdown') {
+                markdownSource = editor.value;
+            } else if (editorMode === 'visual') {
+                syncVisualToMarkdown();
+            }
+
+            editorMode = mode;
+
+            if (mode === 'visual') {
+                visualModeBtn.classList.add('active');
+                markdownModeBtn.classList.remove('active');
+                editor.classList.add('hidden');
+                visualEditor.classList.add('visible');
+                updateVisualEditor();
+            } else {
+                markdownModeBtn.classList.add('active');
+                visualModeBtn.classList.remove('active');
+                visualEditor.classList.remove('visible');
+                editor.classList.remove('hidden');
+                editor.value = markdownSource;
+            }
+
+            updatePreview();
+        }
+
+        // Format text - only works in markdown mode now
+        function formatText(format) {
+            if (editorMode !== 'markdown') {
+                showToast('Switch to Markdown mode to edit');
+                return;
+            }
+            const start = editor.selectionStart;
+            const end = editor.selectionEnd;
+            const selected = editor.value.substring(start, end);
+
+            let before = '', after = '';
+            switch(format) {
+                case 'bold': before = '**'; after = '**'; break;
+                case 'italic': before = '*'; after = '*'; break;
+                case 'code': before = '`'; after = '`'; break;
+            }
+
+            editor.value = editor.value.substring(0, start) + before + selected + after + editor.value.substring(end);
+            editor.selectionStart = start + before.length;
+            editor.selectionEnd = start + before.length + selected.length;
+            editor.focus();
+
+            markdownSource = editor.value;
+            updatePreview();
+            triggerAutoSave();
+        }
+
+        // Insert inline math - only in markdown mode
+        function insertInlineMath() {
+            if (editorMode !== 'markdown') {
+                showToast('Switch to Markdown mode to add math');
+                return;
+            }
+            insertTextAtCursor(editor, '$', '$');
+            markdownSource = editor.value;
+            updatePreview();
+            triggerAutoSave();
+        }
+
+        // Insert text in textarea
+        function insertTextAtCursor(textarea, before, after) {
+            const start = textarea.selectionStart;
+            const end = textarea.selectionEnd;
+            const selected = textarea.value.substring(start, end);
+            textarea.value = textarea.value.substring(0, start) + before + selected + after + textarea.value.substring(end);
+            textarea.selectionStart = textarea.selectionEnd = start + before.length + selected.length;
+            textarea.focus();
+        }
+
+        // Insert metadata (title/authors/abstract) at the beginning of the document
+        function insertMetadata() {
+            if (editorMode !== 'markdown') {
+                setEditorMode('markdown');
+            }
+
+            // Check if metadata already exists
+            const content = editor.value;
+            if (content.includes('@title:')) {
+                showToast('Metadata already exists - edit it directly in Source mode');
+                // Move cursor to the title line
+                const titlePos = content.indexOf('@title:');
+                editor.selectionStart = titlePos + 8;
+                editor.selectionEnd = content.indexOf('\n', titlePos);
+                editor.focus();
+                return;
+            }
+
+            // Insert at the very beginning
+            const metadataTemplate = `@title: Your Paper Title
+@authors: Author One, Author Two
+@date: ${new Date().getFullYear()}
+@abstract: Your abstract goes here. Describe the main contributions and findings of your paper.
+
+`;
+            editor.value = metadataTemplate + editor.value;
+            markdownSource = editor.value;
+
+            // Select the title text for easy editing
+            editor.selectionStart = 8; // After "@title: "
+            editor.selectionEnd = 24; // "Your Paper Title"
+            editor.focus();
+
+            updatePreview();
+            triggerAutoSave();
+            showToast('Metadata added - edit the title');
+        }
+
+        // Insert abstract section
+        function insertAbstract() {
+            if (editorMode !== 'markdown') {
+                setEditorMode('markdown');
+            }
+
+            const content = editor.value;
+
+            // Check if abstract already exists
+            if (content.includes('@abstract:')) {
+                showToast('Abstract already exists - edit it directly');
+                const absPos = content.indexOf('@abstract:');
+                editor.selectionStart = absPos + 11;
+                editor.selectionEnd = content.indexOf('\n\n', absPos) || content.length;
+                editor.focus();
+                return;
+            }
+
+            // Find where to insert (after other metadata tags)
+            let insertPos = 0;
+            const lines = content.split('\n');
+            for (let i = 0; i < lines.length; i++) {
+                if (lines[i].startsWith('@title:') || lines[i].startsWith('@authors:') || lines[i].startsWith('@date:') || lines[i].trim() === '') {
+                    insertPos += lines[i].length + 1;
+                } else {
+                    break;
+                }
+            }
+
+            const abstractTemplate = `@abstract: Your abstract goes here. Describe the main contributions and findings of your paper.
+
+`;
+            editor.value = content.substring(0, insertPos) + abstractTemplate + content.substring(insertPos);
+            markdownSource = editor.value;
+
+            // Position cursor in abstract text
+            editor.selectionStart = insertPos + 11; // After "@abstract: "
+            editor.selectionEnd = insertPos + 11 + 84; // Select placeholder text
+            editor.focus();
+
+            updatePreview();
+            triggerAutoSave();
+            showToast('Abstract added');
+        }
+
+        // Insert page break
+        function insertPageBreak() {
+            if (editorMode !== 'markdown') {
+                // Switch to markdown mode and insert
+                setEditorMode('markdown');
+            }
+            const pos = editor.selectionStart;
+            editor.value = editor.value.substring(0, pos) + '\n\n===pagebreak===\n\n' + editor.value.substring(pos);
+            markdownSource = editor.value;
+            updatePreview();
+            triggerAutoSave();
+            showToast('Page break inserted');
+        }
+
+        // Insert math block
+        function insertMathBlock() {
+            if (editorMode !== 'markdown') {
+                setEditorMode('markdown');
+            }
+            const mathTemplate = '$$\n\\begin{aligned}\nx &= y\n\\end{aligned}\n$$';
+            const pos = editor.selectionStart;
+            editor.value = editor.value.substring(0, pos) + '\n' + mathTemplate + '\n' + editor.value.substring(pos);
+            markdownSource = editor.value;
+            updatePreview();
+            triggerAutoSave();
+        }
+
+        // Render math in element
+        function renderMathIn(element) {
+            if (window.MathJax && window.MathJax.typesetPromise) {
+                MathJax.typesetPromise([element]).catch(err => console.log('MathJax:', err));
+            }
+        }
+
+        // Convert ChatGPT bracket notation to standard LaTeX delimiters
+        // ChatGPT often outputs [...] for display math and (...) for inline math
+        function convertChatGPTMath(text) {
+            // Convert display math: standalone [...] on its own lines
+            // Match [ at start of line, math content, ] at end of line
+            text = text.replace(/^\s*\[\s*\n([\s\S]*?)\n\s*\]\s*$/gm, (match, math) => {
+                // Only convert if it looks like math
+                if (/[\\^_{}=]/.test(math) || /\\[a-zA-Z]/.test(math)) {
+                    return `$$\n${math.trim()}\n$$`;
+                }
+                return match;
+            });
+
+            // Also handle single-line display math: [ formula ]
+            text = text.replace(/^\s*\[\s*\n?([\s\S]*?)\n?\s*\]\s*$/gm, (match, math) => {
+                if (/[\\^_{}=]/.test(math) || /\\[a-zA-Z]/.test(math)) {
+                    return `$$${math.trim()}$$`;
+                }
+                return match;
+            });
+
+            // Convert inline math: (formula) where formula contains LaTeX commands
+            // Be careful not to match regular parentheses
+            text = text.replace(/\(([^()]*\\[a-zA-Z][^()]*)\)/g, (match, math) => {
+                // Only convert if it contains LaTeX commands
+                if (/\\[a-zA-Z]/.test(math) || /[_^{}]/.test(math)) {
+                    return `$${math.trim()}$`;
+                }
+                return match;
+            });
+
+            return text;
+        }
+
+        // Protect math from markdown processing
+        function protectMath(text) {
+            // First convert ChatGPT bracket notation
+            text = convertChatGPTMath(text);
+
+            const mathBlocks = [];
+            let counter = 0;
+            // Display math first $$...$$
+            text = text.replace(/\$\$([\s\S]*?)\$\$/g, (m, math) => {
+                mathBlocks.push({ type: 'display', content: math });
+                return `%%MATHBLOCK${counter++}%%`;
+            });
+            // Also handle \[...\] display math
+            text = text.replace(/\\\[([\s\S]*?)\\\]/g, (m, math) => {
+                mathBlocks.push({ type: 'display', content: math });
+                return `%%MATHBLOCK${counter++}%%`;
+            });
+            // Inline math $...$
+            text = text.replace(/\$([^\$\n]+?)\$/g, (m, math) => {
+                mathBlocks.push({ type: 'inline', content: math });
+                return `%%MATHBLOCK${counter++}%%`;
+            });
+            // Also handle \(...\) inline math
+            text = text.replace(/\\\(([\s\S]*?)\\\)/g, (m, math) => {
+                mathBlocks.push({ type: 'inline', content: math });
+                return `%%MATHBLOCK${counter++}%%`;
+            });
+            return { text, mathBlocks };
+        }
+
+        function restoreMath(html, mathBlocks) {
+            mathBlocks.forEach((block, i) => {
+                const delim = block.type === 'display' ? '$$' : '$';
+                html = html.replace(`%%MATHBLOCK${i}%%`, `${delim}${block.content}${delim}`);
+            });
+            return html;
+        }
+
+        // Extract metadata tags from markdown (@title:, @authors:, @date:)
+        function extractMetadata(md) {
+            const metadata = {
+                title: '',
+                authors: '',
+                date: '',
+                abstract: '',
+                content: md
+            };
+
+            // Extract @title: line
+            const titleMatch = md.match(/^@title:\s*(.+)$/m);
+            if (titleMatch) {
+                metadata.title = titleMatch[1].trim();
+                metadata.content = metadata.content.replace(titleMatch[0], '').trim();
+            }
+
+            // Extract @authors: line
+            const authorsMatch = metadata.content.match(/^@authors:\s*(.+)$/m);
+            if (authorsMatch) {
+                metadata.authors = authorsMatch[1].trim();
+                metadata.content = metadata.content.replace(authorsMatch[0], '').trim();
+            }
+
+            // Extract @date: line
+            const dateMatch = metadata.content.match(/^@date:\s*(.+)$/m);
+            if (dateMatch) {
+                metadata.date = dateMatch[1].trim();
+                metadata.content = metadata.content.replace(dateMatch[0], '').trim();
+            }
+
+            // Extract @abstract: block (can be multi-line, ends at next @ tag or blank line + content)
+            const abstractMatch = metadata.content.match(/^@abstract:\s*([\s\S]*?)(?=\n@|\n\n(?=[^@\s])|\n\n\n|$)/m);
+            if (abstractMatch) {
+                metadata.abstract = abstractMatch[1].trim();
+                metadata.content = metadata.content.replace(abstractMatch[0], '').trim();
+            }
+
+            return metadata;
+        }
+
+        // Page content height in pixels (11in - 2*0.75in padding at 96dpi)
+        const PAGE_CONTENT_HEIGHT = (11 - 1.5) * 96; // ~912px
+
+        // Update PDF preview with ArXiv-style layout and AUTO-PAGINATION
+        function updatePreview() {
+            const md = getMarkdown();
+            const twoCol = columnLayout.value === 'two';
+
+            // Extract metadata from markdown
+            const metadata = extractMetadata(md);
+            const contentWithoutMeta = metadata.content;
+
+            // Split by manual page breaks first
+            const manualPages = contentWithoutMeta.split(/===pagebreak===/);
+
+            previewContainer.innerHTML = '';
+
+            // Process each manual page section
+            manualPages.forEach((pageContent, manualIdx) => {
+                // For first manual page, extract header and abstract
+                let headerHtml = '';
+                let abstractHtml = '';
+                let bodyContent = pageContent;
+
+                if (manualIdx === 0) {
+                    // Build header from metadata tags
+                    const hasTitle = metadata.title && metadata.title.trim();
+                    const hasAuthors = metadata.authors && metadata.authors.trim();
+                    const titleHtml = hasTitle
+                        ? escapeHtml(metadata.title)
+                        : '<span style="color:#999;font-style:italic;">Add @title: Your Paper Title</span>';
+                    const authorsHtml = hasAuthors
+                        ? escapeHtml(metadata.authors)
+                        : '<span style="color:#999;font-size:10pt;font-style:italic;">Add @authors: Author Names</span>';
+                    headerHtml = `<div class="paper-header">
+                        <div class="paper-title">${titleHtml}</div>
+                        <div class="paper-authors">${authorsHtml}</div>
+                    </div>`;
+
+                    // Use abstract from metadata tag
+                    if (metadata.abstract) {
+                        const { text: protectedAbstract, mathBlocks: abstractMath } = protectMath(metadata.abstract);
+                        let absHtml = marked.parse(protectedAbstract);
+                        absHtml = restoreMath(absHtml, abstractMath);
+                        absHtml = absHtml.replace(/^<p>([\s\S]*)<\/p>\s*$/, '$1');
+                        abstractHtml = `<div class="paper-abstract">
+                            <div class="paper-abstract-title">Abstract</div>
+                            <div class="paper-abstract-text">${absHtml}</div>
+                        </div>`;
+                    }
+                }
+
+                // Parse body content to HTML
+                const { text: protectedBody, mathBlocks: bodyMath } = protectMath(bodyContent);
+                let bodyHtml = marked.parse(protectedBody);
+                bodyHtml = restoreMath(bodyHtml, bodyMath);
+
+                // Create pages with auto-pagination
+                createPaginatedPages(headerHtml, abstractHtml, bodyHtml, twoCol, manualIdx === 0);
+            });
+
+            // Count and display pages
+            const pageCount = previewContainer.querySelectorAll('.paper-page').length;
+            pageCountEl.textContent = `${pageCount} page${pageCount > 1 ? 's' : ''}`;
+
+            // Render math
+            renderMathIn(previewContainer);
+
+            // Re-check pagination after MathJax renders (math can change heights)
+            setTimeout(() => {
+                repaginateIfNeeded();
+            }, 800);
+        }
+
+        // Create paginated pages from content
+        function createPaginatedPages(headerHtml, abstractHtml, bodyHtml, twoCol, isFirstSection) {
+            // Create a temporary container to measure content
+            const tempContainer = document.createElement('div');
+            tempContainer.style.cssText = 'position:absolute;left:-9999px;top:0;width:8.5in;';
+            tempContainer.innerHTML = `<div class="paper-page ${twoCol ? 'two-column' : ''}" style="height:auto;overflow:visible;">
+                ${isFirstSection ? headerHtml : ''}
+                ${isFirstSection ? abstractHtml : ''}
+                <div class="paper-body"><div class="body-columns">${bodyHtml}</div></div>
+            </div>`;
+            document.body.appendChild(tempContainer);
+
+            // Get all block-level elements from the body
+            const tempPage = tempContainer.querySelector('.paper-page');
+            const tempBody = tempContainer.querySelector('.paper-body');
+            const tempBodyColumns = tempContainer.querySelector('.body-columns');
+
+            // Measure header + abstract height
+            let fixedHeight = 0;
+            if (isFirstSection) {
+                const header = tempContainer.querySelector('.paper-header');
+                const abstract = tempContainer.querySelector('.paper-abstract');
+                if (header) fixedHeight += header.offsetHeight;
+                if (abstract) fixedHeight += abstract.offsetHeight;
+            }
+
+            // Get all child elements of body-columns
+            const bodyChildren = tempBodyColumns ? Array.from(tempBodyColumns.children) : [];
+
+            document.body.removeChild(tempContainer);
+
+            // Now create actual pages
+            let currentPageDiv = createNewPage(twoCol);
+            let currentBody = currentPageDiv.querySelector('.paper-body') || document.createElement('div');
+            currentBody.className = 'paper-body';
+
+            if (isFirstSection) {
+                currentPageDiv.insertAdjacentHTML('afterbegin', headerHtml + abstractHtml);
+            }
+
+            if (!currentPageDiv.querySelector('.paper-body')) {
+                currentPageDiv.appendChild(currentBody);
+            }
+
+            previewContainer.appendChild(currentPageDiv);
+
+            // Add body content wrapped in body-columns for two-column layout
+            currentBody.innerHTML = `<div class="body-columns">${bodyHtml}</div>`;
+        }
+
+        // Create a new empty page
+        function createNewPage(twoCol) {
+            const pageDiv = document.createElement('div');
+            pageDiv.className = 'paper-page' + (twoCol ? ' two-column' : '');
+            const bodyDiv = document.createElement('div');
+            bodyDiv.className = 'paper-body';
+            const bodyColumnsDiv = document.createElement('div');
+            bodyColumnsDiv.className = 'body-columns';
+            bodyDiv.appendChild(bodyColumnsDiv);
+            pageDiv.appendChild(bodyDiv);
+            return pageDiv;
+        }
+
+        // Re-paginate after MathJax renders if content overflows
+        function repaginateIfNeeded() {
+            const pages = previewContainer.querySelectorAll('.paper-page');
+            const twoCol = columnLayout.value === 'two';
+
+            pages.forEach((page, pageIdx) => {
+                // Check if this page overflows
+                if (page.scrollHeight > page.clientHeight + 10) {
+                    // Content overflows - need to split
+                    splitOverflowingPage(page, pageIdx, twoCol);
+                }
+            });
+
+            // Update page count
+            const pageCount = previewContainer.querySelectorAll('.paper-page').length;
+            pageCountEl.textContent = `${pageCount} page${pageCount > 1 ? 's' : ''}`;
+        }
+
+        // Split a page that has overflowing content
+        function splitOverflowingPage(page, pageIdx, twoCol) {
+            const body = page.querySelector('.paper-body');
+            if (!body) return;
+
+            // Get body-columns wrapper or body itself
+            const bodyColumns = body.querySelector('.body-columns') || body;
+            const children = Array.from(bodyColumns.children);
+            if (children.length === 0) return;
+
+            // Find the point where content overflows
+            // Page height is 11in = 1056px at 96dpi, minus padding (0.75in * 2 = 144px) = 912px content area
+            const maxHeight = page.clientHeight;
+
+            // Get header/abstract height if present
+            let reservedHeight = 0;
+            const header = page.querySelector('.paper-header');
+            const abstract = page.querySelector('.paper-abstract');
+            if (header) reservedHeight += header.offsetHeight;
+            if (abstract) reservedHeight += abstract.offsetHeight;
+
+            const availableHeight = maxHeight - reservedHeight - 20; // 20px safety margin
+
+            // Find which children fit
+            let accumulatedHeight = 0;
+            let splitIndex = children.length;
+
+            for (let i = 0; i < children.length; i++) {
+                const child = children[i];
+                const childHeight = child.offsetHeight;
+
+                if (accumulatedHeight + childHeight > availableHeight && i > 0) {
+                    splitIndex = i;
+                    break;
+                }
+                accumulatedHeight += childHeight;
+            }
+
+            // If everything fits or we can't split, just mark as potentially overflowing
+            if (splitIndex >= children.length) {
+                return;
+            }
+
+            // Create new page for overflow content
+            const newPage = createNewPage(twoCol);
+            const newBody = newPage.querySelector('.paper-body');
+            const newBodyColumns = newBody.querySelector('.body-columns') || newBody;
+
+            // Move overflowing children to new page
+            for (let i = splitIndex; i < children.length; i++) {
+                newBodyColumns.appendChild(children[i].cloneNode(true));
+            }
+
+            // Remove moved children from original
+            for (let i = children.length - 1; i >= splitIndex; i--) {
+                bodyColumns.removeChild(children[i]);
+            }
+
+            // Insert new page after current
+            if (page.nextSibling) {
+                previewContainer.insertBefore(newPage, page.nextSibling);
+            } else {
+                previewContainer.appendChild(newPage);
+            }
+
+            // Recursively check if new page also overflows
+            if (newPage.scrollHeight > newPage.clientHeight + 10) {
+                splitOverflowingPage(newPage, pageIdx + 1, twoCol);
+            }
+        }
+
+        // Export to PDF using browser's native print (produces real text PDF)
+        async function exportPDF() {
+            showToast('Preparing for print...');
+
+            // Ensure MathJax is fully rendered
+            if (window.MathJax && window.MathJax.typesetPromise) {
+                await MathJax.typesetPromise([previewContainer]);
+            }
+
+            // Small delay to ensure rendering is complete
+            await new Promise(resolve => setTimeout(resolve, 300));
+
+            // Set document title for the PDF filename from @title: tag
+            const originalTitle = document.title;
+            const metadata = extractMetadata(getMarkdown());
+            document.title = metadata.title || 'document';
+
+            // Trigger browser print dialog
+            // User can select "Save as PDF" in the print dialog
+            showToast('Select "Save as PDF" in print dialog');
+            window.print();
+
+            // Restore title
+            document.title = originalTitle;
+        }
+
+        // LocalStorage
+        function saveToLocalStorage() {
+            try {
+                const content = getMarkdown();
+                const metadata = extractMetadata(content);
+                localStorage.setItem(STORAGE_KEYS.content, content);
+                localStorage.setItem(STORAGE_KEYS.layout, columnLayout.value);
+                localStorage.setItem(STORAGE_KEYS.lastSaved, new Date().toISOString());
+                updateSaveStatus();
+
+                // Create version (will auto-group based on 3-min gap)
+                createVersion(content, metadata.title, metadata.authors);
+            } catch (e) { console.error('Save error:', e); }
+        }
+
+        function loadFromLocalStorage() {
+            try {
+                const saved = localStorage.getItem(STORAGE_KEYS.content);
+                if (saved !== null) {
+                    setMarkdown(saved);
+                    columnLayout.value = localStorage.getItem(STORAGE_KEYS.layout) || 'two';
+                    updateSaveStatus();
+                    return true;
+                }
+            } catch (e) { console.error('Load error:', e); }
+            return false;
+        }
+
+        function updateSaveStatus() {
+            const lastSaved = localStorage.getItem(STORAGE_KEYS.lastSaved);
+            if (lastSaved) {
+                const date = new Date(lastSaved);
+                saveStatus.textContent = `(saved ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })})`;
+            }
+        }
+
+        function triggerAutoSave() {
+            if (autoSaveTimer) clearTimeout(autoSaveTimer);
+            saveStatus.textContent = '(saving...)';
+            saveStatus.style.color = '#f59e0b';
+            autoSaveTimer = setTimeout(() => {
+                saveToLocalStorage();
+                saveStatus.style.color = '#22c55e';
+            }, AUTO_SAVE_DELAY);
+        }
+
+        // File operations
+        function newDocument() {
+            if (getMarkdown() && !confirm('Create new document?')) return;
+            saveToLocalStorage();
+            setMarkdown(`@title: Untitled Document
+@authors:
+
+## Abstract
+
+Your abstract here...
+
+---
+
+## 1. Introduction
+
+Start writing...
+`);
+            updatePreview();
+            saveToLocalStorage();
+            showToast('New document created');
+        }
+
+        function openMarkdown() { fileInput.click(); }
+
+        function handleFileOpen(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                saveToLocalStorage();
+                let content = e.target.result;
+
+                // If file has YAML frontmatter, try to convert it to @tags
+                const yamlMatch = content.match(/^---\n([\s\S]*?)\n---\n/);
+                if (yamlMatch) {
+                    const yaml = yamlMatch[1];
+                    content = content.replace(yamlMatch[0], '');
+
+                    const titleMatch = yaml.match(/title:\s*["']?([^"'\n]+)["']?/);
+                    const authorsMatch = yaml.match(/authors:\s*["']?([^"'\n]+)["']?/);
+
+                    if (titleMatch && !content.includes('@title:')) {
+                        content = `@title: ${titleMatch[1]}\n` + content;
+                    }
+                    if (authorsMatch && !content.includes('@authors:')) {
+                        content = `@authors: ${authorsMatch[1]}\n` + content;
+                    }
+                }
+
+                setMarkdown(content);
+                updatePreview();
+                saveToLocalStorage();
+                showToast(`Opened: ${file.name}`);
+            };
+            reader.readAsText(file);
+            event.target.value = '';
+        }
+
+        function saveMarkdown() {
+            const content = getMarkdown();
+            const metadata = extractMetadata(content);
+            const blob = new Blob([content], { type: 'text/markdown;charset=utf-8' });
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = (metadata.title || 'document').replace(/[^a-zA-Z0-9-_ ]/g, '') + '.md';
+            a.click();
+            URL.revokeObjectURL(a.href);
+            showToast(`Saved: ${a.download}`);
+        }
+
+        // UI helpers
+        function showToast(msg) {
+            toast.textContent = msg;
+            toast.classList.add('show');
+            setTimeout(() => toast.classList.remove('show'), 3000);
+        }
+
+        function showHelp() { helpModal.classList.add('active'); }
+        function closeHelp() { helpModal.classList.remove('active'); }
+        helpModal.addEventListener('click', e => { if (e.target === helpModal) closeHelp(); });
+
+
+        // Resize handle
+        let isResizing = false;
+        resizeHandle.addEventListener('mousedown', () => {
+            isResizing = true;
+            document.body.style.cursor = 'col-resize';
+            document.body.style.userSelect = 'none';
+        });
+        document.addEventListener('mousemove', e => {
+            if (!isResizing) return;
+            const pane = document.querySelector('.editor-pane');
+            const mainRect = document.querySelector('.main').getBoundingClientRect();
+            const newWidth = e.clientX - mainRect.left;
+            if (newWidth > 200 && newWidth < mainRect.width - 200) {
+                pane.style.flex = 'none';
+                pane.style.width = newWidth + 'px';
+            }
+        });
+        document.addEventListener('mouseup', () => {
+            isResizing = false;
+            document.body.style.cursor = '';
+            document.body.style.userSelect = '';
+        });
+
+        // Event listeners
+        editor.addEventListener('input', () => {
+            markdownSource = editor.value;
+            updatePreview();
+            triggerAutoSave();
+        });
+
+        // Visual editor input - sync changes back to markdown (preserving formulas and tags)
+        visualEditor.addEventListener('input', () => {
+            syncVisualToMarkdown();
+            updatePreview();
+            triggerAutoSave();
+        });
+
+        columnLayout.addEventListener('change', () => { updatePreview(); triggerAutoSave(); });
+
+        // Keyboard shortcuts
+        document.addEventListener('keydown', e => {
+            if (e.ctrlKey || e.metaKey) {
+                if (e.key === 's') { e.preventDefault(); exportPDF(); }
+                else if (e.key === 'b') { e.preventDefault(); formatText('bold'); }
+                else if (e.key === 'i') { e.preventDefault(); formatText('italic'); }
+            }
+            if (e.key === 'Escape') closeHelp();
+        });
+
+        // Sample content with ArXiv structure - title/authors as markdown tags
+        const sampleContent = `@title: Fractal Networks: Spectral Decomposition of Dense Layers
+@authors: Anonymous Authors
+@date: 2024
+
+## Abstract
+
+This paper introduces a novel approach to neural network architecture design using fractal decomposition of dense layers into specialized low-rank shards. We demonstrate significant memory efficiency while maintaining model capacity through spectral decomposition.
+
+---
+
+## 1. Introduction
+
+A standard transformer MLP layer is parameterized by a dense weight matrix:
+
+$$
+W \\in \\mathbb{R}^{d_{\\text{in}} \\times d_{\\text{out}}}
+$$
+
+with $O(d_{\\text{in}} \\cdot d_{\\text{out}})$ parameters. This creates a **monolithic generalist** where every input dimension can communicate directly with every output dimension.
+
+## 2. Fractal Decomposition
+
+In the Fractal Network, this monolith is decomposed into a **sum of specialized shards**:
+
+$$
+W \\approx \\sum_{k=0}^{K-1} W_k, \\qquad W_k = U_k V_k^\\top
+$$
+
+Each $W_k$ is implemented as a **Fractal Cell** with:
+
+* **Self-similar** structure to the parent MLP
+* **Low-rank** factorization where $r_k \\ll d_{\\text{in}}, d_{\\text{out}}$
+* **Spectral specialization** to narrow frequency bands
+
+===pagebreak===
+
+## 3. Mathematical Formulation
+
+The forward path through a single cell $k$:
+
+$$
+\\begin{aligned}
+h_k &= V_k^\\top x \\in \\mathbb{R}^{r_k} \\quad &&\\text{(compression)} \\\\
+a_k &= \\phi(h_k) \\quad &&\\text{(nonlinearity)} \\\\
+\\tilde{y}_k &= U_k a_k \\in \\mathbb{R}^{d_{\\text{out}}} \\quad &&\\text{(expansion)}
+\\end{aligned}
+$$
+
+where $\\phi$ denotes the SiLU activation function.
+
+## 4. Conclusion
+
+The Fractal Cell architecture provides significant memory efficiency while maintaining model capacity through spectral decomposition. Future work will explore adaptive rank selection and dynamic cell allocation.`;
+
+        // Initialize
+        if (!loadFromLocalStorage()) {
+            setMarkdown(sampleContent);
+            saveToLocalStorage();
+        }
+
+        // Initialize version base content if not set
+        if (!getBaseContent()) {
+            setBaseContent(getMarkdown());
+        }
+
+        // Initialize lastVersionTime from most recent version
+        const versions = getVersions();
+        if (versions.length > 0) {
+            lastVersionTime = versions[versions.length - 1].timestamp;
+            currentVersionId = versions[versions.length - 1].id;
+        }
+
+        updatePreview();
+
+        window.addEventListener('load', () => setTimeout(updatePreview, 500));
+        window.addEventListener('beforeunload', saveToLocalStorage);
+        setInterval(() => { if (getMarkdown()) saveToLocalStorage(); }, 30000);
+
+        console.log('MarkTeX loaded - Version history enabled');
+    </script>
+</body>
+</html>
