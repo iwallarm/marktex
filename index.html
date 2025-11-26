@@ -1007,7 +1007,7 @@
                     </div>
                 </div>
             </div>
-            <!-- Visual Editor (editable text, protected formulas and metadata) -->
+            <!-- Visual Editor (editable text, formulas protected) -->
             <div id="visualEditor" class="visible" contenteditable="true"></div>
             <!-- Raw Markdown Editor -->
             <textarea id="editor" class="hidden" placeholder="Raw Markdown mode..."></textarea>
@@ -1084,6 +1084,8 @@
         let markdownSource = '';
         // Track formula positions for protection
         let formulaPositions = [];
+        // Store formulas by ID to prevent corruption from MathJax
+        let visualEditorFormulas = {};
 
         // LocalStorage keys
         const STORAGE_KEYS = {
@@ -1567,6 +1569,8 @@
 
         // Update visual editor from markdown source (READ-ONLY preview)
         function updateVisualEditor() {
+            // Clear formula storage before rebuilding
+            visualEditorFormulas = {};
             // Convert ChatGPT bracket notation in source first
             const normalizedMd = convertChatGPTMath(markdownSource);
             visualEditor.innerHTML = markdownToVisualHtml(normalizedMd);
@@ -1632,12 +1636,14 @@
             html = marked.parse(html);
 
             // Restore math with styled wrappers - contenteditable="false" to protect them
+            // Store original LaTeX in JS map (not DOM) to survive MathJax rendering
             mathBlocks.forEach((block, i) => {
                 const tag = block.type === 'display' ? 'div' : 'span';
                 const cssClass = block.type === 'display' ? 'math-formula display' : 'math-formula';
-                // Store original math in data attribute for sync back
-                const escapedOriginal = escapeAttr(block.original);
-                const mathHtml = `<${tag} class="${cssClass}" contenteditable="false" data-math="${escapedOriginal}">${block.original}</${tag}>`;
+                const formulaId = 'formula-' + Date.now() + '-' + i;
+                // Store in JS map - MathJax can't touch this
+                visualEditorFormulas[formulaId] = block.original;
+                const mathHtml = `<${tag} class="${cssClass}" contenteditable="false" data-formula-id="${formulaId}">${block.original}</${tag}>`;
                 html = html.replace(`%%VMATH${i}%%`, mathHtml);
             });
 
@@ -1708,13 +1714,21 @@
 
                 const tag = node.tagName.toLowerCase();
 
-                // Protected math formulas - use original from data attribute
+                // Protected math formulas - use original from JS map
                 if (node.classList.contains('math-formula')) {
-                    const originalMath = node.getAttribute('data-math');
-                    if (originalMath) {
-                        return unescapeAttr(originalMath);
+                    const formulaId = node.getAttribute('data-formula-id');
+                    if (formulaId && visualEditorFormulas[formulaId]) {
+                        return visualEditorFormulas[formulaId];
                     }
+                    // Fallback - shouldn't happen
                     return node.textContent;
+                }
+
+                // Skip MathJax rendered output containers (they're inside math-formula)
+                if (node.classList.contains('MathJax') ||
+                    node.tagName === 'MJX-CONTAINER' ||
+                    node.tagName.startsWith('MJX-')) {
+                    return '';
                 }
 
                 // Page breaks
@@ -1782,7 +1796,7 @@
 
         // Set editor mode
         function setEditorMode(mode) {
-            // Always save content when leaving current mode
+            // Save content when leaving current mode
             if (editorMode === 'markdown') {
                 markdownSource = editor.value;
             } else if (editorMode === 'visual') {
@@ -2497,7 +2511,7 @@ Start writing...
             triggerAutoSave();
         });
 
-        // Visual editor input - sync changes back to markdown (preserving formulas and tags)
+        // Visual editor input - sync changes back to markdown (formulas stored in JS map)
         visualEditor.addEventListener('input', () => {
             syncVisualToMarkdown();
             updatePreview();
